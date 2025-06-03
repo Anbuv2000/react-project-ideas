@@ -1,9 +1,9 @@
-name: Build & Deploy React App
+name: Build & Deploy React App (No Plugins)
 
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   deploy:
@@ -24,7 +24,7 @@ jobs:
       - name: Build React app
         run: npm run build
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -35,14 +35,15 @@ jobs:
         run: |
           aws s3 sync build/ s3://${{ secrets.S3_BUCKET_NAME }}/ --delete
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ~/react-app
-            rm -rf build
-            mkdir -p build
-            exit
+      - name: Create SSH key file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Copy build to EC2
+        run: |
+          scp -i key.pem -r build/* ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/ubuntu/react-app/build
+
+      - name: Restart app on EC2
+        run: |
+          ssh -i key.pem ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "pm2 restart react-app"
